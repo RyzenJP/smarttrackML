@@ -1,0 +1,1 @@
+{"accuracy": 95.0, "r2_score": -0.25, "rmse": 35.78, "samples_used": 22, "algorithm": "XGBoost + Schedule-Based", "timestamp": "2025-10-01T19:43:36.801597"}
