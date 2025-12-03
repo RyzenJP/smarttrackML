@@ -1,20 +1,16 @@
 #!/usr/bin/env python3
 """
 Smart Track Predictive Maintenance ML Server
-- Port: 8080
+- Flask-based REST API
 - Algorithm: XGBoost Regressor
 - Maintenance Schedule: 5k km / 3-month intervals
-- Python 3.12+ compatible
+- Heroku-ready deployment
 """
 
 import os
 import json
 import pickle
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta
-import threading
-import time
 
 import numpy as np
 import pandas as pd
@@ -23,6 +19,9 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
 import mysql.connector
+
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 # Maintenance Schedule (Your specification)
 MAINTENANCE_SCHEDULE = [
@@ -361,101 +360,89 @@ class MaintenancePredictor:
             }
         }
 
+# Initialize Flask app
+app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
+
 # Global predictor
 predictor = MaintenancePredictor()
 
-class MLHandler(BaseHTTPRequestHandler):
-    def log_message(self, format, *args):
-        """Custom logging"""
-        print(f"{self.address_string()} - [{datetime.now().strftime('%d/%b/%Y %H:%M:%S')}] {format % args}")
-    
-    def do_OPTIONS(self):
-        """Handle CORS preflight"""
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
-    
-    def do_GET(self):
-        """Handle GET requests"""
-        parsed = urlparse(self.path)
-        path = parsed.path
-        params = parse_qs(parsed.query)
-        
-        try:
-            if path == '/status':
-                result = predictor.get_status()
-            elif path == '/predict_all':
-                result = predictor.predict_all_vehicles()
-            elif path == '/predict':
-                vehicle_id = params.get('vehicle_id', [None])[0]
-                if not vehicle_id:
-                    result = {'success': False, 'message': 'vehicle_id required'}
-                else:
-                    # For single vehicle, get from predict_all and filter
-                    all_preds = predictor.predict_all_vehicles()
-                    if all_preds['success']:
-                        matching = [p for p in all_preds['data'] if p['vehicle_id'] == int(vehicle_id)]
-                        if matching:
-                            result = {'success': True, 'data': matching[0]}
-                        else:
-                            result = {'success': False, 'message': 'Vehicle not found'}
-                    else:
-                        result = all_preds
-            else:
-                result = {'success': False, 'message': 'Invalid endpoint'}
-            
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps(result).encode())
-            
-        except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            error_result = {'success': False, 'message': f'Server error: {str(e)}'}
-            self.wfile.write(json.dumps(error_result).encode())
-    
-    def do_POST(self):
-        """Handle POST requests"""
-        parsed = urlparse(self.path)
-        path = parsed.path
-        
-        try:
-            if path == '/train':
-                result = predictor.train_model()
-            else:
-                result = {'success': False, 'message': 'Invalid endpoint'}
-            
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps(result).encode())
-            
-        except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            error_result = {'success': False, 'message': f'Server error: {str(e)}'}
-            self.wfile.write(json.dumps(error_result).encode())
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint"""
+    return jsonify({'success': True, 'status': 'healthy'})
 
-def start_server(port=8080):
-    """Start the ML server"""
-    server_address = ('', port)
-    httpd = HTTPServer(server_address, MLHandler)
+@app.route('/status', methods=['GET'])
+def status():
+    """Get server status"""
+    try:
+        result = predictor.get_status()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
+
+@app.route('/predict_all', methods=['GET'])
+def predict_all():
+    """Get predictions for all vehicles"""
+    try:
+        result = predictor.predict_all_vehicles()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
+
+@app.route('/predict', methods=['GET'])
+def predict():
+    """Get prediction for a single vehicle"""
+    try:
+        vehicle_id = request.args.get('vehicle_id')
+        if not vehicle_id:
+            return jsonify({'success': False, 'message': 'vehicle_id required'}), 400
+        
+        # For single vehicle, get from predict_all and filter
+        all_preds = predictor.predict_all_vehicles()
+        if all_preds['success']:
+            matching = [p for p in all_preds['data'] if p['vehicle_id'] == int(vehicle_id)]
+            if matching:
+                return jsonify({'success': True, 'data': matching[0]})
+            else:
+                return jsonify({'success': False, 'message': 'Vehicle not found'}), 404
+        else:
+            return jsonify(all_preds), 500
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
+
+@app.route('/train', methods=['POST'])
+def train():
+    """Train the ML model"""
+    try:
+        result = predictor.train_model()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
+
+@app.route('/stats', methods=['GET'])
+def stats():
+    """Get model training statistics"""
+    try:
+        stats = None
+        if os.path.exists(predictor.stats_file):
+            with open(predictor.stats_file, 'r') as f:
+                stats = json.load(f)
+        return jsonify({'success': True, 'data': stats})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
+
+if __name__ == '__main__':
+    port = int(os.getenv('PORT', 8080))
     
-    print(f"[SERVER] Smart Track ML Server started on port {port}")
+    print(f"[SERVER] Smart Track ML Server starting...")
     print(f"[INFO] Algorithm: XGBoost Regressor")
     print(f"[INFO] Endpoints:")
+    print(f"   GET  http://localhost:{port}/health")
     print(f"   GET  http://localhost:{port}/status")
     print(f"   GET  http://localhost:{port}/predict_all")
     print(f"   GET  http://localhost:{port}/predict?vehicle_id=1")
+    print(f"   GET  http://localhost:{port}/stats")
     print(f"   POST http://localhost:{port}/train")
     print(f"[INFO] Server running... Press Ctrl+C to stop\n")
     
@@ -468,9 +455,6 @@ def start_server(port=8080):
         else:
             print(f"[WARNING] Startup training failed: {result['message']}")
     
-    httpd.serve_forever()
-
-if __name__ == '__main__':
-    port = int(os.getenv('ML_SERVER_PORT', 8080))
-    start_server(port)
+    # Run Flask app
+    app.run(host='0.0.0.0', port=port, debug=False)
 
