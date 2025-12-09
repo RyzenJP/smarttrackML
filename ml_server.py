@@ -51,7 +51,7 @@ def get_db_connection():
     """Connect to MySQL database"""
     # Use environment variables (set in Heroku) or fallback to production defaults
     db_config = {
-        'host': os.getenv('DB_HOST', 'localhost'),
+        'host': os.getenv('DB_HOST', 'srv1322.hstgr.io'),  # Hostinger database hostname
         'user': os.getenv('DB_USER', 'u520834156_uSmartTrck25'),
         'password': os.getenv('DB_PASS', 'xjOzav~2V'),
         'database': os.getenv('DB_NAME', 'u520834156_dbSmartTrack'),
