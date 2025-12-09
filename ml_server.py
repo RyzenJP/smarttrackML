@@ -50,8 +50,9 @@ MAINTENANCE_SCHEDULE = [
 def get_db_connection():
     """Connect to MySQL database"""
     # Use environment variables (set in Heroku) or fallback to production defaults
+    # Using IP address (153.92.15.8) for more reliable connection than hostname
     db_config = {
-        'host': os.getenv('DB_HOST', 'srv1322.hstgr.io'),  # Hostinger database hostname
+        'host': os.getenv('DB_HOST', '153.92.15.8'),  # Hostinger database IP address (hostname: srv1322.hstgr.io)
         'user': os.getenv('DB_USER', 'u520834156_uSmartTrck25'),
         'password': os.getenv('DB_PASS', 'xjOzav~2V'),
         'database': os.getenv('DB_NAME', 'u520834156_dbSmartTrack'),
