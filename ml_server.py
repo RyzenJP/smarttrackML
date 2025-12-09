@@ -49,14 +49,26 @@ MAINTENANCE_SCHEDULE = [
 
 def get_db_connection():
     """Connect to MySQL database"""
-    return mysql.connector.connect(
-        host=os.getenv('DB_HOST', 'localhost'),
-        user=os.getenv('DB_USER', 'root'),
-        password=os.getenv('DB_PASS', ''),
-        database=os.getenv('DB_NAME', 'trackingv2'),
-        charset='utf8mb4',
-        collation='utf8mb4_general_ci'
-    )
+    # Use environment variables (set in Heroku) or fallback to production defaults
+    db_config = {
+        'host': os.getenv('DB_HOST', 'localhost'),
+        'user': os.getenv('DB_USER', 'u520834156_uSmartTrck25'),
+        'password': os.getenv('DB_PASS', 'xjOzav~2V'),
+        'database': os.getenv('DB_NAME', 'u520834156_dbSmartTrack'),
+        'charset': 'utf8mb4',
+        'collation': 'utf8mb4_general_ci',
+        'autocommit': True,
+        'connect_timeout': 10,
+        'raise_on_warnings': False
+    }
+    
+    try:
+        conn = mysql.connector.connect(**db_config)
+        return conn
+    except mysql.connector.Error as e:
+        print(f"[ERROR] Database connection failed: {e}")
+        print(f"[DEBUG] Attempting to connect to: {db_config['host']} / {db_config['database']}")
+        raise
 
 class MaintenancePredictor:
     def __init__(self):
