@@ -381,8 +381,30 @@ predictor = MaintenancePredictor()
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
-    return jsonify({'success': True, 'status': 'healthy'})
+    """Health check endpoint with database connection test"""
+    try:
+        # Test database connection
+        conn = get_db_connection()
+        if conn and conn.is_connected():
+            conn.close()
+            return jsonify({
+                'success': True, 
+                'status': 'healthy',
+                'database': 'connected'
+            })
+        else:
+            return jsonify({
+                'success': False, 
+                'status': 'healthy',
+                'database': 'disconnected'
+            }), 503
+    except Exception as e:
+        return jsonify({
+            'success': False, 
+            'status': 'healthy',
+            'database': 'error',
+            'error': str(e)
+        }), 503
 
 @app.route('/status', methods=['GET'])
 def status():
